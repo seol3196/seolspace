@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>출장 일정표</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .calendar { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .calendar th { background: #f0f0f0; padding: 10px; }
+        .calendar td { 
+            border: 1px solid #ddd; 
+            height: 120px;
+            width: 14.28%;
+            vertical-align: top;
+            padding: 5px;
+            position: relative;
+            overflow: hidden;
+        }
+        .date { font-weight: bold; margin-bottom: 5px; position: sticky; top: 5px; background: white; z-index: 1; }
+        .event-container {
+            height: calc(100% - 30px);
+            overflow-y: auto;
+            position: relative;
+            margin-top: 5px;
+        }
+        .event { 
+            font-size: 13px; 
+            margin: 2px 0;
+            padding: 4px;
+            border-radius: 4px;
+            overflow: hidden;
+            width: calc(100% - 8px);
+            box-sizing: border-box;
+            line-height: 1.3;
+        }
+        .event.internal { background: #e3f2fd; }
+        .event.external { background: #fff3e0; }
+        .controls { margin-bottom: 20px; }
+        .month-title { 
+            display: inline-block; 
+            margin: 0 20px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        button {
+            padding: 5px 15px;
+            cursor: pointer;
+        }
+        .tooltip {
+            display: none;
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        #debug {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .event-time {
+            font-weight: bold;
+            font-size: 14px;
+            display: block;
+            margin-bottom: 2px;
+        }
+        .event-purpose {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 12px;
+        }
+    </style>
+    <script>
+        const AIRTABLE_BASE_ID = 'app3PywREA3FBjzsk';
+        const AIRTABLE_TOKEN = 'patFYtNIwTphF3ReH.32cf2bd20fcd57cc547b7bf6edd8563849b98d8daf922d79a123622d86a70dbd';
+        const TABLE_NAME = 'Table 1';
+
+        async function loadEventsFromAirtable() {
+            try {
+                const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}`, {
+                    headers: {
+                        'Authorization': `Bearer ${AIRTABLE_TOKEN}`
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Airtable raw data:', data);
+
+                const mappedEvents = data.records.map(record => {
+                    const formattedDate = record.fields.Date.replace(/-/g, '.');
+                    
+                    const event = {
+                        date: formattedDate,
+                        time: record.fields.Time,
+                        purpose: record.fields.Purpose,
+                        location: record.fields.Location,
+                        type: record.fields.Type,
+                        members: record.fields.Members,
+                        duration: record.fields.Duration
+                    };
+                    console.log('Mapped event:', event);
+                    return event;
+                });
+
+                return mappedEvents;
+            } catch (error) {
+                console.error('Error loading from Airtable:', error);
+                return [];
+            }
+        }
+
+        async function saveEventToAirtable(event) {
+            try {
+                const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        records: [{
+                            fields: {
+                                Date: event.date,
+                                Time: event.time,
+                                Purpose: event.purpose,
+                                Location: event.location,
+                                Type: event.type,
+                                Members: event.members,
+                                Duration: event.duration
+                            }
+                        }]
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Airtable API Error: ${JSON.stringify(errorData)}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Error saving to Airtable:', error);
+                throw error; // 에러를 상위로 전파
+            }
+        }
+
+        // 모든 레코드를 삭제하는 함수 추가
+        async function deleteAllRecords() {
+            try {
+                // 먼저 모든 레코드 조회
+                const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}`, {
+                    headers: {
+                        'Authorization': `Bearer ${AIRTABLE_TOKEN}`
+                    }
+                });
+                const data = await response.json();
+                
+                // 삭제할 레코드 ID 목록 생성
+                const recordIds = data.records.map(record => record.id);
+                
+                // 레코드가 없으면 종료
+                if (recordIds.length === 0) return;
+                
+                // 최대 10개씩 묶어서 삭제 (Airtable API 제한)
+                for (let i = 0; i < recordIds.length; i += 10) {
+                    const batch = recordIds.slice(i, i + 10);
+                    const deleteUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}?records[]=${batch.join('&records[]=')}`;
+                    
+                    await fetch(deleteUrl, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${AIRTABLE_TOKEN}`
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error deleting records:', error);
+                throw error;
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- 상단에 추가할 네비게이션 바 -->
+    <div style="
+        background-color: #2563eb; 
+        padding: 1rem; 
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+    ">
+        <a href="index.html" style="
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span>홈으로</span>
+        </a>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="fileInput" accept=".txt,.csv">
+        <button onclick="saveToAirtable()" style="margin-left: 10px;">Airtable에 저장</button>
+        <div id="uploadStatus"></div>
+    </div>
+    <div class="controls">
+        <button onclick="prevMonth()">◀</button>
+        <span class="month-title" id="monthTitle"></span>
+        <button onclick="nextMonth()">▶</button>
+    </div>
+    <table class="calendar">
+        <thead>
+            <tr>
+                <th>일</th>
+                <th>월</th>
+                <th>화</th>
+                <th>수</th>
+                <th>목</th>
+                <th>금</th>
+                <th>토</th>
+            </tr>
+        </thead>
+        <tbody id="calendarBody"></tbody>
+    </table>
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // 전역 변수 선언
+        let currentDate = new Date();
+        let events = [];
+        let debugDiv;
+
+        let parsedCSVEvents = []; // CSV에서 파싱된 이벤트를 임시 저장
+
+        function parseCSVLine(line) {
+            let result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === '"') {
+                    inQuotes = !inQuotes;
+                } else if (line[i] === ',' && !inQuotes) {
+                    result.push(current.replace(/^"|"$/g, ''));
+                    current = '';
+                } else {
+                    current += line[i];
+                }
+            }
+            result.push(current.replace(/^"|"$/g, ''));
+            return result;
+        }
+
+        function parseCSV(text) {
+            const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+            const parsedEvents = []; // events 대신 새로운 배열 사용
+            
+            const dataLines = lines.slice(1).filter(line => line.trim());
+            
+            dataLines.forEach((line, index) => {
+                const columns = parseCSVLine(line);
+
+                if (columns.length < 13) {
+                    return;
+                }
+
+                const [
+                    순번, 부서, 신청당시부서, 출장종류, 출장지, 출장목적, 
+                    공용차량이용여부, 출장기간, 일수기간, 결재상태, 출장인원, 
+                    신청자, 삭제여부
+                ] = columns;
+
+                const periodMatch = 출장기간.match(/(\d{4}\.\d{2}\.\d{2}) (\d{2}:\d{2}) ~ \d{4}\.\d{2}\.\d{2} (\d{2}:\d{2})/);
+                
+                if (periodMatch && 결재상태.includes('완결') && !결재상태.includes('취소')) {
+                    const [_, date, startTime, endTime] = periodMatch;
+                    parsedEvents.push({
+                        date: date,
+                        time: `${startTime}-${endTime}`,
+                        purpose: 출장목적,
+                        location: 출장지,
+                        type: 출장종류,
+                        members: 출장인원,
+                        duration: 일수기간
+                    });
+                }
+            });
+
+            return parsedEvents; // 파싱된 이벤트 배열 반환
+        }
+
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parsedCSVEvents = parseCSV(text); // CSV 파싱 결과를 임시 저장
+                events = [...parsedCSVEvents]; // events 배열 복사본 생성
+                renderCalendar(); // 캘린더 다시 렌더링
+                document.getElementById('uploadStatus').textContent = 
+                    `${parsedCSVEvents.length}개의 일정이 준비되었습니다. '저장' 버튼을 클릭하여 Airtable에 저장하세요.`;
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+
+        // saveToAirtable 함수 수정
+        async function saveToAirtable() {
+            if (parsedCSVEvents.length === 0) {
+                alert('저장할 데이터가 없습니다. CSV 파일을 먼저 선택해주세요.');
+                return;
+            }
+
+            const status = document.getElementById('uploadStatus');
+            status.textContent = '기존 데이터 삭제 중...';
+
+            try {
+                // 기존 데이터 모두 삭제
+                await deleteAllRecords();
+                status.textContent = '새로운 데이터 저장 중...';
+
+                // 새 데이터 저장 (최대 10개씩 묶어서 저장)
+                for (let i = 0; i < parsedCSVEvents.length; i += 10) {
+                    const batch = parsedCSVEvents.slice(i, i + 10);
+                    await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            records: batch.map(event => ({
+                                fields: {
+                                    Date: event.date,
+                                    Time: event.time,
+                                    Purpose: event.purpose,
+                                    Location: event.location,
+                                    Type: event.type,
+                                    Members: event.members,
+                                    Duration: event.duration
+                                }
+                            }))
+                        })
+                    });
+                    
+                    // API 요청 간 약간의 지연
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                status.textContent = `${parsedCSVEvents.length}개의 일정이 Airtable에 저장되었습니다.`;
+                
+                // Airtable에서 최신 데이터 다시 로드
+                const updatedEvents = await loadEventsFromAirtable();
+                events = updatedEvents;
+                renderCalendar();
+                
+                // 임시 저장 데이터 초기화
+                parsedCSVEvents = [];
+            } catch (error) {
+                status.textContent = '저장 중 오류가 발생했습니다: ' + error.message;
+                console.error('Error saving to Airtable:', error);
+            }
+        }
+
+        // 페이지 로드 시 Airtable 데이터 가져오기
+        async function initializeCalendar() {
+            try {
+                const status = document.getElementById('uploadStatus');
+                status.textContent = 'Airtable에서 데이터를 불러오는 중...';
+                
+                events = await loadEventsFromAirtable();
+                status.textContent = `${events.length}개의 일정을 불러왔습니다.`;
+                
+                renderCalendar();
+            } catch (error) {
+                console.error('Error initializing calendar:', error);
+                document.getElementById('uploadStatus').textContent = 
+                    'Airtable 데이터 로드 중 오류가 발생했습니다.';
+            }
+
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', handleFileUpload);
+            }
+        }
+
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            
+            document.getElementById('monthTitle').textContent = 
+                `${year}년 ${month + 1}월`;
+
+            const tbody = document.getElementById('calendarBody');
+            tbody.innerHTML = '';
+
+            let date = 1;
+            const rows = Math.ceil((firstDay.getDay() + lastDay.getDate()) / 7);
+
+            for (let i = 0; i < rows; i++) {
+                const row = document.createElement('tr');
+                
+                for (let j = 0; j < 7; j++) {
+                    const cell = document.createElement('td');
+                    
+                    if (i === 0 && j < firstDay.getDay()) {
+                        cell.textContent = '';
+                    } else if (date > lastDay.getDate()) {
+                        cell.textContent = '';
+                    } else {
+                        const dateDiv = document.createElement('div');
+                        dateDiv.className = 'date';
+                        dateDiv.textContent = date;
+                        cell.appendChild(dateDiv);
+
+                        const eventContainer = document.createElement('div');
+                        eventContainer.className = 'event-container';
+                        cell.appendChild(eventContainer);
+
+                        // 날짜 형식을 맞추기 위해 수정
+                        const dateStr = `${year}.${String(month + 1).padStart(2, '0')}.${String(date).padStart(2, '0')}`;
+                        console.log('Looking for events on:', dateStr); // 디버깅용 로그
+                        
+                        const dayEvents = events.filter(event => {
+                            console.log('Comparing with event date:', event.date); // 디버깅용 로그
+                            return event.date === dateStr;
+                        });
+
+                        dayEvents.forEach(event => {
+                            console.log('Adding event to calendar:', event); // 디버깅용 로그
+                            const eventDiv = document.createElement('div');
+                            eventDiv.className = `event ${event.type.includes('관외') ? 'external' : 'internal'}`;
+                            
+                            const timeSpan = document.createElement('span');
+                            timeSpan.className = 'event-time';
+                            timeSpan.textContent = event.time;
+                            
+                            const purposeSpan = document.createElement('span');
+                            purposeSpan.className = 'event-purpose';
+                            purposeSpan.textContent = event.purpose;
+                            
+                            eventDiv.appendChild(timeSpan);
+                            eventDiv.appendChild(purposeSpan);
+                            
+                            eventDiv.addEventListener('mouseover', function(e) {
+                                const tooltip = document.getElementById('tooltip');
+                                tooltip.innerHTML = `
+                                    <strong>장소:</strong> ${event.location}<br>
+                                    <strong>참석자:</strong> ${event.members}<br>
+                                    <strong>소요시간:</strong> ${event.duration}
+                                `;
+                                tooltip.style.display = 'block';
+                                tooltip.style.left = e.pageX + 10 + 'px';
+                                tooltip.style.top = e.pageY + 10 + 'px';
+                            });
+
+                            eventDiv.addEventListener('mouseout', function() {
+                                document.getElementById('tooltip').style.display = 'none';
+                            });
+
+                            eventContainer.appendChild(eventDiv);
+                        });
+
+                        date++;
+                    }
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
+        }
+
+        function prevMonth() {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        }
+
+        function nextMonth() {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        }
+
+        // DOM이 로드된 후 초기화 함수 실행
+        document.addEventListener('DOMContentLoaded', initializeCalendar);
+    </script>
+</body>
+</html>
