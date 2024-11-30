@@ -54,6 +54,19 @@
               <span class="tool-status status-active">사용 가능</span>
             </div>
           </a>
+
+          <a href="reservation.html" style="text-decoration: none;">
+            <div class="tool-card">
+              <div class="tool-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 class="tool-title">예약 시스템</h3>
+              <p class="tool-description">회의실 및 기타 시설 예약을 관리할 수 있습니다.</p>
+              <span class="tool-status status-active">사용 가능</span>
+            </div>
+          </a>
         </div>
       </div>
     </div>

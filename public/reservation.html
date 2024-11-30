@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>예약 시스템</title>
+    <style>
+        body { 
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; 
+            margin: 20px; 
+        }
+        .calendar { 
+            width: 100%; 
+            border-collapse: collapse; 
+            table-layout: fixed; 
+        }
+        .calendar th { 
+            background: #f0f0f0; 
+            padding: 10px; 
+        }
+        .calendar td { 
+            border: 1px solid #ddd; 
+            height: 120px;
+            width: 14.28%;
+            vertical-align: top;
+            padding: 5px;
+            position: relative;
+        }
+        .date { 
+            font-weight: bold; 
+            margin-bottom: 5px; 
+        }
+        .reservation {
+            background: #e3f2fd;
+            padding: 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .reservation-item {
+            font-weight: bold;
+            color: #1a73e8;
+        }
+        .reservation-name {
+            color: #333;
+            margin: 2px 0;
+        }
+        .reservation-time {
+            color: #666;
+            font-size: 11px;
+        }
+        .controls { 
+            margin-bottom: 20px; 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .month-title { 
+            font-size: 20px;
+            font-weight: bold;
+        }
+        button {
+            padding: 5px 15px;
+            cursor: pointer;
+        }
+        .reservation-container {
+            margin-top: 5px;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+        .reservation {
+            background: #e3f2fd;
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .calendar td:hover {
+            background-color: #f8f9fa;
+        }
+        button {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        .month-title {
+            min-width: 150px;
+            text-align: center;
+        }
+        .add-button {
+            margin-left: 20px;
+            background-color: #4CAF50;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        .form-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .form-buttons button {
+            padding: 8px 16px;
+        }
+    </style>
+    <script>
+        const AIRTABLE_BASE_ID = 'appTTlaIF02iKcnjE';
+        const AIRTABLE_TOKEN = 'patowBJh80qN1pA7P.17a1a6d5100c4f6528ce3f685074f4757a1b7e6a0aa873ba3b50e3b381c947a6';
+        const TABLE_NAME = 'Table 1';
+        
+        let currentDate = new Date();
+        let reservations = [];
+
+        async function initializeCalendar() {
+            try {
+                renderCalendar();  // 일단 빈 캘린더라도 보여주기
+                
+                const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_NAME)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Airtable 응답:', data);  // 데이터 확인용 로그
+
+                if (data && data.records) {
+                    reservations = data.records
+                        .filter(record => record.fields && Object.keys(record.fields).length > 0)
+                        .map(record => {
+                            console.log('처리중인 레코드:', record);  // 각 레코드 확인용 로그
+                            return {
+                                date: record.fields.Date || '',
+                                time: record.fields.Time || '',
+                                name: record.fields.Name || '',
+                                item: record.fields.Item || ''
+                            };
+                        });
+                    
+                    console.log('처리된 예약 데이터:', reservations);  // 최종 데이터 확인용 로그
+                }
+
+                renderCalendar();
+            } catch (error) {
+                console.error('에러 상세 정보:', error);
+                reservations = [];
+                renderCalendar();
+            }
+        }
+
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            
+            document.getElementById('monthTitle').textContent = 
+                `${year}년 ${month + 1}월`;
+
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            
+            const tbody = document.getElementById('calendarBody');
+            tbody.innerHTML = '';
+
+            let date = 1;
+            const rows = Math.ceil((firstDay.getDay() + lastDay.getDate()) / 7);
+
+            for (let i = 0; i < rows; i++) {
+                const row = document.createElement('tr');
+                
+                for (let j = 0; j < 7; j++) {
+                    const cell = document.createElement('td');
+                    
+                    if (i === 0 && j < firstDay.getDay()) {
+                        cell.textContent = '';
+                    } else if (date > lastDay.getDate()) {
+                        cell.textContent = '';
+                    } else {
+                        const dateDiv = document.createElement('div');
+                        dateDiv.className = 'date';
+                        dateDiv.textContent = date;
+                        cell.appendChild(dateDiv);
+
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+                        const dayReservations = reservations.filter(res => res.date === dateStr);
+
+                        if (dayReservations.length > 0) {
+                            const reservationContainer = document.createElement('div');
+                            reservationContainer.className = 'reservation-container';
+
+                            dayReservations.forEach(reservation => {
+                                const reservationDiv = document.createElement('div');
+                                reservationDiv.className = 'reservation';
+                                reservationDiv.innerHTML = `
+                                    <div class="reservation-item">${reservation.item}</div>
+                                    <div class="reservation-name">${reservation.name}</div>
+                                    <div class="reservation-time">${reservation.time}</div>
+                                `;
+                                reservationContainer.appendChild(reservationDiv);
+                            });
+
+                            cell.appendChild(reservationContainer);
+                        }
+
+                        date++;
+                    }
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
+        }
+
+        function prevMonth() {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        }
+
+        function nextMonth() {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        }
+
+        function showReservationModal() {
+            document.getElementById('reservationModal').style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('reservationModal').style.display = 'none';
+            document.getElementById('reservationForm').reset();
+        }
+    </script>
+</head>
+<body>
+    <!-- 네비게이션 바 -->
+    <div style="background-color: #2563eb; padding: 1rem; margin-bottom: 20px;">
+        <a href="index.html" style="color: white; text-decoration: none; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span>홈으로</span>
+        </a>
+    </div>
+
+    <div class="controls">
+        <button onclick="prevMonth()">◀</button>
+        <span class="month-title" id="monthTitle"></span>
+        <button onclick="nextMonth()">▶</button>
+        <button onclick="showReservationModal()" class="add-button">예약하기</button>
+    </div>
+
+    <table class="calendar">
+        <thead>
+            <tr>
+                <th>일</th>
+                <th>월</th>
+                <th>화</th>
+                <th>수</th>
+                <th>목</th>
+                <th>금</th>
+                <th>토</th>
+            </tr>
+        </thead>
+        <tbody id="calendarBody"></tbody>
+    </table>
+
+    <!-- 모달 추가 -->
+    <div id="reservationModal" class="modal">
+        <div class="modal-content">
+            <h2>새 예약</h2>
+            <form id="reservationForm">
+                <div class="form-group">
+                    <label for="date">날짜</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                <div class="form-group">
+                    <label for="time">시간</label>
+                    <input type="text" id="time" name="time" placeholder="예: 1교시, 2교시" required>
+                </div>
+                <div class="form-group">
+                    <label for="item">항목</label>
+                    <input type="text" id="item" name="item" required>
+                </div>
+                <div class="form-group">
+                    <label for="name">이름</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">비밀번호</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit">예약하기</button>
+                    <button type="button" onclick="closeModal()">취소</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeCalendar();
+
+            // 폼 제출 이벤트 리스너
+            document.getElementById('reservationForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const formData = {
+                    records: [{
+                        fields: {
+                            Date: document.getElementById('date').value,
+                            Time: document.getElementById('time').value,
+                            Item: document.getElementById('item').value,
+                            Name: document.getElementById('name').value,
+                            Password: document.getElementById('password').value
+                        }
+                    }]
+                };
+                
+                console.log('전송할 데이터:', formData);
+                
+                try {
+                    const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_NAME)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const responseData = await response.json();
+                    console.log('Airtable 응답:', responseData);
+                    
+                    if (!response.ok) {
+                        throw new Error(`예약 실패: ${responseData.error?.message || '알 수 없는 오류'}`);
+                    }
+                    
+                    alert('예약이 완료되었습니다.');
+                    closeModal();
+                    await initializeCalendar();
+                } catch (error) {
+                    console.error('에러 상세 정보:', error);
+                    alert(`예약 중 오류가 발생했습니다: ${error.message}`);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
