@@ -150,6 +150,11 @@
         .form-buttons button {
             padding: 8px 16px;
         }
+        .info-text {
+            margin-left: 20px;
+            font-size: 14px;
+            color: #555;
+        }
     </style>
     <script>
         const AIRTABLE_BASE_ID = 'appTTlaIF02iKcnjE';
@@ -161,8 +166,6 @@
 
         async function initializeCalendar() {
             try {
-                renderCalendar();  // 일단 빈 캘린더라도 보여주기
-                
                 const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_NAME)}`, {
                     method: 'GET',
                     headers: {
@@ -176,27 +179,24 @@
                 }
                 
                 const data = await response.json();
-                console.log('Airtable 응답:', data);  // 데이터 확인용 로그
 
                 if (data && data.records) {
                     reservations = data.records
-                        .filter(record => record.fields && Object.keys(record.fields).length > 0)
-                        .map(record => {
-                            console.log('처리중인 레코드:', record);  // 각 레코드 확인용 로그
-                            return {
-                                date: record.fields.Date || '',
-                                time: record.fields.Time || '',
-                                name: record.fields.Name || '',
-                                item: record.fields.Item || ''
-                            };
-                        });
-                    
-                    console.log('처리된 예약 데이터:', reservations);  // 최종 데이터 확인용 로그
+                        .filter(record => record.fields && record.fields.Activate === 'O')
+                        .map(record => ({
+                            id: record.id,
+                            date: record.fields.Date || '',
+                            time: record.fields.Time || '',
+                            name: record.fields.Name || '',
+                            item: record.fields.Item || '',
+                            password: record.fields.Password || '',
+                            activate: record.fields.Activate || ''
+                        }));
                 }
 
                 renderCalendar();
             } catch (error) {
-                console.error('에러 상세 정보:', error);
+                console.error('에러:', error);
                 reservations = [];
                 renderCalendar();
             }
@@ -249,6 +249,7 @@
                                     <div class="reservation-name">${reservation.name}</div>
                                     <div class="reservation-time">${reservation.time}</div>
                                 `;
+                                reservationDiv.ondblclick = () => openPasswordModal(reservation.id);
                                 reservationContainer.appendChild(reservationDiv);
                             });
 
@@ -281,6 +282,18 @@
             document.getElementById('reservationModal').style.display = 'none';
             document.getElementById('reservationForm').reset();
         }
+
+        let selectedReservationId = null;
+
+        function openPasswordModal(reservationId) {
+            selectedReservationId = reservationId;
+            document.getElementById('passwordModal').style.display = 'block';
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').style.display = 'none';
+            document.getElementById('passwordForm').reset();
+        }
     </script>
 </head>
 <body>
@@ -299,6 +312,7 @@
         <span class="month-title" id="monthTitle"></span>
         <button onclick="nextMonth()">▶</button>
         <button onclick="showReservationModal()" class="add-button">예약하기</button>
+        <span class="info-text">예약 항목을 더블클릭하면 예약 취소가 가능합니다.</span>
     </div>
 
     <table class="calendar">
@@ -349,11 +363,28 @@
         </div>
     </div>
 
+    <!-- 비밀번호 입력 모달 -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <h2>예약 취소</h2>
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label for="cancelPassword">비밀번호</label>
+                    <input type="password" id="cancelPassword" name="cancelPassword" required>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit">확인</button>
+                    <button type="button" onclick="closePasswordModal()">취소</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             initializeCalendar();
 
-            // 폼 제출 이벤트 리스너
+            // 예약하기 폼 이벤트 리스너
             document.getElementById('reservationForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 
@@ -364,12 +395,11 @@
                             Time: document.getElementById('time').value,
                             Item: document.getElementById('item').value,
                             Name: document.getElementById('name').value,
-                            Password: document.getElementById('password').value
+                            Password: document.getElementById('password').value,
+                            Activate: 'O'
                         }
                     }]
                 };
-                
-                console.log('전송할 데이터:', formData);
                 
                 try {
                     const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(TABLE_NAME)}`, {
@@ -394,6 +424,56 @@
                 } catch (error) {
                     console.error('에러 상세 정보:', error);
                     alert(`예약 중 오류가 발생했습니다: ${error.message}`);
+                }
+            });
+
+            // 예약 취소 폼 이벤트 리스너
+            document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const enteredPassword = document.getElementById('cancelPassword').value;
+                
+                try {
+                    const reservation = reservations.find(res => res.id === selectedReservationId);
+                    
+                    if (!reservation) {
+                        throw new Error('예약을 찾을 수 없습니다.');
+                    }
+
+                    if (reservation.password !== enteredPassword) {
+                        alert('비밀번호가 일치하지 않습니다.');
+                        return;
+                    }
+
+                    const response = await fetch(
+                        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}/${selectedReservationId}`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                fields: {
+                                    Activate: 'X'
+                                }
+                            })
+                        }
+                    );
+
+                    const responseData = await response.json();
+                    console.log('Airtable 응답:', responseData);
+
+                    if (!response.ok) {
+                        throw new Error('예약 취소 실패');
+                    }
+
+                    alert('예약이 취소되었습니다.');
+                    closePasswordModal();
+                    await initializeCalendar();
+                } catch (error) {
+                    console.error('에러:', error);
+                    alert(`예약 취소 중 오류가 발생했습니다: ${error.message}`);
                 }
             });
         });
