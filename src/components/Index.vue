@@ -1,86 +1,107 @@
 <template>
   <div>
-    <div id="loginSection" v-if="!isLoggedIn">
-      <div class="login-container">
-        <h1 class="login-title">SEOL'space</h1>
-        <form class="password-form" @submit.prevent="checkPassword">
-          <input 
-            type="password" 
-            v-model="password" 
-            class="password-input" 
-            placeholder="비밀번호를 입력하세요"
-            maxlength="4"
-            required
-          >
-          <button type="submit" class="submit-button">입력</button>
-          <div v-if="showError" class="error-message">
-            비밀번호가 올바르지 않습니다
-          </div>
-        </form>
+    <div v-if="!showAnalyzer">
+      <div id="loginSection" v-if="!isLoggedIn">
+        <div class="login-container">
+          <h1 class="login-title">SEOL'space</h1>
+          <form class="password-form" @submit.prevent="checkPassword">
+            <input 
+              type="password" 
+              v-model="password" 
+              class="password-input" 
+              placeholder="비밀번호를 입력하세요"
+              maxlength="4"
+              required
+            >
+            <button type="submit" class="submit-button">입력</button>
+            <div v-if="showError" class="error-message">
+              비밀번호가 올바르지 않습니다
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
 
-    <div id="dashboardSection" v-if="isLoggedIn">
-      <div class="container">
-        <header>
-          <h1 class="title">SEOL'space</h1>
-          <p class="subtitle">rmsid</p>
-        </header>
+      <div id="dashboardSection" v-if="isLoggedIn">
+        <div class="container">
+          <header>
+            <h1 class="title">SEOL'space</h1>
+            <p class="subtitle">rmsid</p>
+          </header>
 
-        <div class="tools-grid">
-          <a href="calendar.html" style="text-decoration: none;">
-            <div class="tool-card">
+          <div class="tools-grid">
+            <a href="calendar.html" style="text-decoration: none;">
+              <div class="tool-card">
+                <div class="tool-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 class="tool-title">출장 일정표</h3>
+                <p class="tool-description">출장 일정을 캘린더 형식으로 관리하고 조회할 수 있습니다.</p>
+                <span class="tool-status status-active">사용 가능</span>
+              </div>
+            </a>
+
+            <a href="youtube.html" style="text-decoration: none;">
+              <div class="tool-card">
+                <div class="tool-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 class="tool-title">유튜브 변환기</h3>
+                <p class="tool-description">유튜브 링크를 프라이버시 보호 모드로 변환합니다.</p>
+                <span class="tool-status status-active">사용 가능</span>
+              </div>
+            </a>
+
+            <a href="reservation.html" style="text-decoration: none;">
+              <div class="tool-card">
+                <div class="tool-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 class="tool-title">예약 시스템</h3>
+                <p class="tool-description">회의실 및 기타 시설 예약을 관리할 수 있습니다.</p>
+                <span class="tool-status status-active">사용 가능</span>
+              </div>
+            </a>
+
+            <div class="tool-card" @click="showAnalyzer = true" style="cursor: pointer;">
               <div class="tool-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <h3 class="tool-title">출장 일정표</h3>
-              <p class="tool-description">출장 일정을 캘린더 형식으로 관리하고 조회할 수 있습니다.</p>
+              <h3 class="tool-title">한글 문장 유사도 분석기</h3>
+              <p class="tool-description">입력된 문장들 간의 유사도를 분석하여 비교합니다.</p>
               <span class="tool-status status-active">사용 가능</span>
             </div>
-          </a>
-
-          <a href="youtube.html" style="text-decoration: none;">
-            <div class="tool-card">
-              <div class="tool-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 class="tool-title">유튜브 변환기</h3>
-              <p class="tool-description">유튜브 링크를 프라이버시 보호 모드로 변환합니다.</p>
-              <span class="tool-status status-active">사용 가능</span>
-            </div>
-          </a>
-
-          <a href="reservation.html" style="text-decoration: none;">
-            <div class="tool-card">
-              <div class="tool-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 class="tool-title">예약 시스템</h3>
-              <p class="tool-description">회의실 및 기타 시설 예약을 관리할 수 있습니다.</p>
-              <span class="tool-status status-active">사용 가능</span>
-            </div>
-          </a>
+          </div>
         </div>
       </div>
     </div>
+
+    <KoreanSimilarityAnalyzer v-else />
   </div>
 </template>
 
 <script>
+import KoreanSimilarityAnalyzer from './KoreanSimilarityAnalyzer.vue'
+
 export default {
+  components: {
+    KoreanSimilarityAnalyzer
+  },
   data() {
     return {
       password: '',
       correctPassword: '3196',
       showError: false,
-      isLoggedIn: false
+      isLoggedIn: false,
+      showAnalyzer: false
     };
   },
   methods: {

@@ -6,6 +6,7 @@
 
 <script>
 import Index from '@/components/Index.vue';
+import KoreanSimilarityAnalyzer from './components/KoreanSimilarityAnalyzer.vue'
 
 export default {
   name: 'App',
